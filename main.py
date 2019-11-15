@@ -4,7 +4,7 @@ import os
 import random
 from dotenv import load_dotenv
 load_dotenv()
-
+import time
 
 PARAMS = {
     'access_token': os.getenv('VK_XKCD_POST_KEY'),
@@ -101,4 +101,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    while True:
+        main()
+        time.sleep(43200)

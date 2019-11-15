@@ -1,0 +1,1 @@
+xkcd_vk: python3 main.py
