@@ -3,14 +3,16 @@ from download_img import download_image
 import os
 import random
 from dotenv import load_dotenv
-load_dotenv()
-import time
+from apscheduler.schedulers.blocking import BlockingScheduler
+sched = BlockingScheduler()
 
-PARAMS = {
-    'access_token': os.getenv('VK_XKCD_POST_KEY'),
-    'group_id': os.getenv('GROUP_ID'),
-    'v': 5.103,
-}
+
+def check_vk_response(response):
+    
+    if response.json().get('response', False):
+        return True
+    else:
+        raise requests.HTTPError(response.json()['error']['error_msg'])
 
 
 def get_current_image_num():
@@ -30,31 +32,32 @@ def get_image(img_num):
         return download_image(response_xkcd['img'], response_xkcd['num']), response_xkcd['alt']
 
 
-def get_url():
+def get_url_for_upload_img(params):
 
     response = requests.get(
-        'https://api.vk.com/method/photos.getWallUploadServer', params=PARAMS)
+        'https://api.vk.com/method/photos.getWallUploadServer', params=params)
 
-    if response.json().get('response', False):
+    if check_vk_response(response):
         return response.json()['response']['upload_url']
-    else:
-        return response.json()['error']['error_msg']
 
 
-def upload_image(file_name):
+def upload_image(file_name, params):
+    try:
+        with open(file_name, 'rb') as file:
+            files = {
+                'photo': file,
+            }
 
-    with open(file_name, 'rb') as file:
-        files = {
-            'photo': file,
-        }
-
-        response = requests.post(get_url(), files=files)
-    return response.json()
+            response = requests.post(
+                get_url_for_upload_img(params), files=files)
+        return response.json()
+    finally:
+        os.remove(file_name)
 
 
-def save_image(data_for_save_image):
+def save_image(data_for_save_image, params):
 
-    params_to_save_image = PARAMS.copy()
+    params_to_save_image = params.copy()
     params_to_save_image.update({
         'server': data_for_save_image['server'],
         'photo': data_for_save_image['photo'],
@@ -72,11 +75,11 @@ def save_image(data_for_save_image):
         return response.json()['error']['error_msg']
 
 
-def make_post(owner_id, image_id, message):
+def make_post(owner_id, image_id, message, params):
 
-    params_to_post = PARAMS.copy()
+    params_to_post = params.copy()
     params_to_post.update({
-        'owner_id': -int(PARAMS['group_id']),
+        'owner_id': -int(params['group_id']),
         'from_group': 1,
         'attachments': f'photo{owner_id}_{image_id}',
         'message': message
@@ -91,16 +94,20 @@ def make_post(owner_id, image_id, message):
         return response.json()['error']['error_msg']
 
 
+@sched.scheduled_job('interval', hours=6)
 def main():
 
+    load_dotenv()
+    params = {
+        'access_token': os.environ['VK_XKCD_POST_KEY'],
+        'group_id': os.environ['GROUP_ID'],
+        'v': 5.103,
+             }
     img_name, message = get_image(random.randint(1, get_current_image_num()))
-    data_for_save_image = upload_image(img_name)
-    owner_id, image_id = save_image(data_for_save_image)
-    print(make_post(owner_id, image_id, message))
-    os.remove(img_name)
+    data_for_save_image = upload_image(img_name, params)
+    owner_id, image_id = save_image(data_for_save_image, params)
+    print(make_post(owner_id, image_id, message, params))
 
 
 if __name__ == "__main__":
-    while True:
-        main()
-        time.sleep(43200)
+    sched.start()

@@ -3,7 +3,7 @@ import os
 
 
 def download_image(url, name):
-    IMAGE_DIR = os.path.normcase('./')
+    IMAGE_DIR = os.path.normcase('.')
     os.makedirs(IMAGE_DIR, exist_ok=True)
     img_response = requests.get(url)
     exstension = url.rsplit('.')[-1]
